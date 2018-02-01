@@ -1,0 +1,150 @@
+SELECT DISTINCT
+AssetSystem0 'Location',
+Tag0 'Tag',
+sys.Name0 'Machine',
+sys.AD_Site_Name0 'ADSite',
+CS.UserName0 'UserName',
+GroupedLogon.LogonCount,
+REPLACE (OS.Caption0, 'Microsoft Windows','Win') OS,
+REPLACE (OS.CSDVersion0,'Service Pack','SP') 'ServicePack',
+CS.Manufacturer0 'Manufacturer',
+CASE CS.Model0
+	when '10A6A0RQLS' then 'M93p Desktop (ThinkCentre)'
+	when '10A6S1CQ19' then 'M93p Desktop (ThinkCentre)'
+	when '10A6S1ET02' then 'M93p Desktop (ThinkCentre)'
+	when '10A6S1ET03' then 'M93p Desktop (ThinkCentre)'
+	when '10AA005FLS' then 'M93p Desktop (ThinkCentre)'
+	when '10AAS2VP03' then 'M93p Desktop (ThinkCentre)'
+	when '10AB002VUS' then 'M93p Desktop (ThinkCentre)'
+	when '10FVS0EY0Z' then 'M800 Desktop (ThinkCentre)'
+	when '10FVS0F00Y' then 'M800 Desktop (ThinkCentre)'
+	when '10FVS0F10D' then 'M800 Desktop (ThinkCentre)'
+	when '20AFS2BJ0G' then 'T460s Laptop (ThinkPad)'
+	when '20AN009CUS' then 'T440p Laptop (ThinkPad)'
+	when '20BW000DLM' then 'T450s Laptop (ThinkPad)'
+	when '20BWS1G905' then 'T450s Laptop (ThinkPad)'
+	when '20BWS3E0US' then 'T450s Laptop (ThinkPad)'
+	when '20BWS3EG0T' then 'T450s Laptop (ThinkPad)'
+	when '20BWS3EGOO' then 'T450s Laptop (ThinkPad)'
+	when '20BWS3EGOT' then 'T450s Laptop (ThinkPad)'
+	when '20BX001FUS' then 'T450s Laptop (ThinkPad)'
+	when '20CJS14P0N' then 'T550 Laptop (ThinkPad)'
+	when '20CJS14S0S' then 'T550 Laptop (ThinkPad)'
+	when '20EGS24K08' then 'W541 Laptop (ThinkPad)'
+	when '20EQS20D08' then 'P50 Laptop (ThinkPad)'
+	when '20EQS20D0J' then 'P50 Laptop (ThinkPad)'
+	when '20EQS28U06' then 'P50 Laptop (ThinkPad)'
+	when '20FAS2BJ0D' then 'T460s Laptop (ThinkPad)'
+	when '20FAS2BJ0G' then 'T460s Laptop (ThinkPad)'
+	when '20FAS2BR03' then 'T460s Laptop (ThinkPad)'
+	when '20FJS18V0C' then 'T560 Laptop (ThinkPad)'
+	when '5384A28' then 'M90 Desktop (ThinkCentre)'
+	else CS.Model0
+END AS 'Model',
+BIOS.SerialNumber0 'SerialNumber',
+BIOS.ReleaseDate0 as BIOSDate,
+BIOS.SMBIOSBIOSVersion0 as BIOSVersion,
+(SELECT CONVERT(DATE,sys.Creation_Date0)) 'CreationDate',
+REPLACE (cs.SystemType0,'-based PC','') 'OSType',
+SUM(D.FreeSpace0) / 1024 as FreeSpaceGB,
+SUM(D.Size0) / 1024 AS 'DiskSizeGB',
+CASE SE.ChassisTypes0
+  when '1' then 'Other'
+  when '2' then 'Unknown'
+  when '3' then 'Desktop'
+  when '4' then 'Low Profile Desktop'
+  when '5' then 'Pizza Box'
+  when '6' then 'Mini Tower'
+  when '7' then 'Tower'
+  when '8' then 'Portable'
+  when '9' then 'Laptop'
+  when '10' then 'Notebook'
+  when '11' then 'Hand Held'
+  when '12' then 'Docking Station'
+  when '13' then 'All in One'
+  when '14' then 'Sub Notebook'
+  when '15' then 'Space-Saving'
+  when '16' then 'Lunch Box'
+  when '17' then 'Main System Chassis'
+  when '18' then 'Expansion Chassis'
+  when '19' then 'SubChassis'
+  when '20' then 'Bus Expansion Chassis'
+  when '21' then 'Peripheral Chassis'
+  when '22' then 'Storage Chassis'
+  when '23' then 'Rack Mount Chassis'
+  when '24' then 'Sealed-Case PC'
+  else 'Undefinded'
+END AS 'PCType'
+FROM
+ v_R_System SYS
+INNER JOIN (
+     SELECT
+      Name0,
+      MAX(Creation_Date0) AS Creation_Date
+     FROM
+     dbo.v_R_System
+    GROUP BY
+     Name0
+) AS CleanSystem
+ON SYS.Name0 = CleanSystem.Name0 and sys.Creation_Date0 = CleanSystem.Creation_Date
+ LEFT JOIN v_GS_COMPUTER_SYSTEM CS
+ON sys.ResourceID=cs.ResourceID
+ LEFT JOIN v_GS_PC_BIOS BIOS
+ON sys.ResourceID=bios.ResourceID
+ LEFT JOIN (
+     SELECT
+      A.ResourceID,
+      MAX(A.[InstallDate0]) AS [InstallDate0]
+     FROM
+      v_GS_OPERATING_SYSTEM A
+     GROUP BY
+      A.ResourceID
+) AS X
+ON sys.ResourceID = X.ResourceID
+INNER JOIN v_GS_OPERATING_SYSTEM OS ON X.ResourceID=OS.ResourceID and X.InstallDate0 = OS.InstallDate0
+INNER JOIN v_GS_DC_Machine_Data0 Name0 ON SYS.ResourceID=Name0.ResourceID
+LEFT OUTER join dbo.v_GS_LOGICAL_DISK D ON sys.ResourceID = D.ResourceID and D.DeviceID0 = 'C:'
+LEFT JOIN dbo.v_GS_SYSTEM_ENCLOSURE SE ON SYS.ResourceID = SE.ResourceID
+inner join ( select ResourceID, MAX(logoncount0) AS LogonCount FROM v_GS_DC_User_Logon_Info0 GROUP BY ResourceID) GroupedLogon
+ON GroupedLogon.ResourceID = sys.ResourceID
+
+ WHERE
+	CS.Model0 not like 'VMware Virtual Platform'
+and OS.Caption0 not like '%Server%'
+ 
+GROUP BY
+  sys.Creation_Date0, sys.Name0, GroupedLogon.LogonCount,
+  sys.AD_Site_Name0 , CS.UserName0 ,REPLACE (OS.Caption0, 'Microsoft Windows','Win') , REPLACE (OS.CSDVersion0,'Service Pack','SP') ,
+  CS.Manufacturer0 , CS.Model0 ,BIOS.SerialNumber0 , REPLACE (cs.SystemType0,'-based PC',''), AssetSystem0 , ConfigIdentTag0,
+CASE SE.ChassisTypes0
+  when '1' then 'Other'
+  when '2' then 'Unknown'
+  when '3' then 'Desktop'
+  when '4' then 'Low Profile Desktop'
+  when '5' then 'Pizza Box'
+  when '6' then 'Mini Tower'
+  when '7' then 'Tower'
+  when '8' then 'Portable'
+  when '9' then 'Laptop'
+  when '10' then 'Notebook'
+  when '11' then 'Hand Held'
+  when '12' then 'Docking Station'
+  when '13' then 'All in One'
+  when '14' then 'Sub Notebook'
+  when '15' then 'Space-Saving'
+  when '16' then 'Lunch Box'
+  when '17' then 'Main System Chassis'
+  when '18' then 'Expansion Chassis'
+  when '19' then 'SubChassis'
+  when '20' then 'Bus Expansion Chassis'
+  when '21' then 'Peripheral Chassis'
+  when '22' then 'Storage Chassis'
+  when '23' then 'Rack Mount Chassis'
+  when '24' then 'Sealed-Case PC'
+  else 'Undefinded'
+END ,
+
+BIOS.ReleaseDate0 ,
+BIOS.SMBIOSBIOSVersion0
+ 
+ORDER BY sys.Name0
